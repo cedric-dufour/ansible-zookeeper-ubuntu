@@ -11,6 +11,7 @@ If installing a standalone instance of Zookeeper, then use something like this:
 ```
 ...
 roles:
+  - ansible-java-ubuntu
   - ansible-zookeeper-ubuntu
 ...
 ```
@@ -20,6 +21,7 @@ If installing a unified [Hadoop](https://hadoop.apache.org/) instance for [Accum
 ```
 ...
 roles:
+  - ansible-java-ubuntu
   - ansible-zookeeper-ubuntu
   - ansible-hadoop-ubuntu
 ...
