@@ -1,0 +1,157 @@
+---
+
+- name: Install Basic Libraries
+  become: yes
+  become_user: root
+  apt: name="{{ item }}" state=latest
+  with_items:
+    - ssh
+    - rsync
+
+- name: "Ensure {{ ZOOKEEPER_HOME }} exists"
+  become: yes
+  become_user: root
+  file:
+    path: "{{ ZOOKEEPER_HOME }}"
+    state: directory
+
+- name: Create zookeeper group
+  become: yes
+  become_user: root
+  group:
+    name: "{{ ZOOKEEPER_USER }}"
+    state: present
+
+- name: Create zookeeper user
+  become: yes
+  become_user: root
+  user:
+    name: "{{ ZOOKEEPER_USER }}"
+    state: present
+    group: "{{ ZOOKEEPER_USER }}"
+    home: "{{ ZOOKEEPER_HOME }}"
+    shell: /bin/bash
+
+- name: Stop Zookeeper
+  become: yes
+  become_user: "{{ ZOOKEEPER_USER }}"
+  shell: ". {{ ZOOKEEPER_HOME }}/.bashrc && bin/zkServer.sh stop"
+  args:
+    chdir: "{{ ZOOKEEPER_HOME }}"
+  when: ZOOKEEPER_STOP | bool
+  failed_when: false
+
+- name: "Download Files"
+  become: yes
+  become_user: root
+  get_url:
+    url: "{{ ZOOKEEPER_URL }}"
+    dest: "/opt/zookeeper-{{ ZOOKEEPER_VERSION }}.tar.gz"
+    checksum: "{{ ZOOKEEPER_CHECKSUM }}"
+
+- name: "Unzip Zookeeper"
+  become: yes
+  become_user: root
+  unarchive:
+    src: "/opt/zookeeper-{{ ZOOKEEPER_VERSION }}.tar.gz"
+    dest: "/opt"
+    copy: no
+
+- name: "Force owner for zookeeper to root"
+  become: yes
+  become_user: root
+  file:
+    path: "/opt/zookeeper-{{ ZOOKEEPER_VERSION }}"
+    state: directory
+    recurse: yes
+    owner: root
+    group: root
+
+- name: "Copy zookeeper from /opt into /usr/local"
+  become: yes
+  become_user: root
+  shell: "cp -R /opt/zookeeper-{{ ZOOKEEPER_VERSION }}/* {{ ZOOKEEPER_HOME }}/"
+
+- name: "Delete temporary zookeeper data"
+  become: yes
+  become_user: root
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "/tmp/zookeeper"
+    - "{{ ZOOKEEPER_DATA }}"
+
+- name: "Template ~/.bashrc"
+  become: yes
+  become_user: root
+  template:
+    src: bashrc.j2
+    dest: "{{ ZOOKEEPER_HOME }}/.bashrc"
+    owner: "{{ ZOOKEEPER_USER }}"
+    group: "{{ ZOOKEEPER_USER }}"
+    mode: 0755
+
+- name: "Copy ~/.profile"
+  become: yes
+  become_user: root
+  copy:
+    src: profile
+    dest: "{{ ZOOKEEPER_HOME }}/.profile"
+    owner: "{{ ZOOKEEPER_USER }}"
+    group: "{{ ZOOKEEPER_USER }}"
+    mode: 0755
+
+- name: "Configure zookeeper config"
+  become: yes
+  become_user: root
+  template:
+    src: zoo.cfg.j2
+    dest: "{{ ZOOKEEPER_HOME }}/conf/zoo.cfg"
+    owner: "{{ ZOOKEEPER_USER }}"
+    group: "{{ ZOOKEEPER_USER }}"
+    mode: 0644
+
+- name: "Patch zookeeper log settings"
+  become: yes
+  become_user: root
+  lineinfile:
+    dest: "{{ ZOOKEEPER_HOME }}/conf/log4j.properties"
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items:
+    - regexp: "^(#?)(\\s*)zookeeper.log.dir(\\s*)="
+      line: "zookeeper.log.dir={{ ZOOKEEPER_HOME }}/logs"
+    - regexp: "^(#?)(\\s*)log4j.rootLogger=DEBUG, CONSOLE, ROLLINGFILE"
+      line: "log4j.rootLogger=DEBUG, CONSOLE, ROLLINGFILE"
+    - regexp: "^(#?)(\\s*)log4j.appender.ROLLINGFILE.MaxBackupIndex(\\s*)="
+      line: log4j.appender.ROLLINGFILE.MaxBackupIndex=10
+
+- name: "Check owner is zookeeper"
+  become: yes
+  become_user: root
+  file:
+    path: "{{ ZOOKEEPER_HOME }}"
+    state: directory
+    recurse: yes
+    owner: "{{ ZOOKEEPER_USER }}"
+    group: "{{ ZOOKEEPER_USER }}"
+
+- name: "Check mode for zookeeper logs"
+  become: yes
+  become_user: root
+  file:
+    path: "{{ ZOOKEEPER_HOME }}/logs"
+    state: directory
+    recurse: yes
+    owner: "{{ ZOOKEEPER_USER }}"
+    group: "{{ ZOOKEEPER_USER }}"
+    mode: 0755
+
+- name: Start Zookeeper
+  become: yes
+  become_user: "{{ ZOOKEEPER_USER }}"
+  shell: ". {{ ZOOKEEPER_HOME }}/.bashrc && bin/zkServer.sh start"
+  args:
+    chdir: "{{ ZOOKEEPER_HOME }}"
+  when: ZOOKEEPER_START | bool
