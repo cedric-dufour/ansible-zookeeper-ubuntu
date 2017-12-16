@@ -151,7 +151,7 @@
 - name: Start Zookeeper
   become: yes
   become_user: "{{ ZOOKEEPER_USER }}"
-  shell: ". {{ ZOOKEEPER_HOME }}/.bashrc && bin/zkServer.sh start"
+  shell: ". .bashrc && bin/zkServer.sh start"
   args:
     chdir: "{{ ZOOKEEPER_HOME }}"
   when: ZOOKEEPER_START | bool
