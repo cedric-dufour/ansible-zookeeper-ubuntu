@@ -1,0 +1,20 @@
+[Unit]
+Description=ZooKeeper Distributed Coordination Server
+After=local-fs.target
+
+[Service]
+Type=forking
+User={{ ZOOKEEPER_USER }}
+Group={{ ZOOKEEPER_GROUP }}
+Environment=ZOO_LOG_DIR={{ ZOOKEEPER_LOGS }}
+Environment=ZOO_LOG4J_PROP={{ ZOOKEEPER_LOG4J }}
+ExecStart={{ ZOOKEEPER_HOME }}/bin/zkServer.sh start
+ExecStop={{ ZOOKEEPER_HOME }}/bin/zkServer.sh stop
+# Java... WTF!?!
+SuccessExitStatus=143
+# Java... pah!
+TimeoutSec=300
+
+[Install]
+WantedBy=multi-user.target
+
