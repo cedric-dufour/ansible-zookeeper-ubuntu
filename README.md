@@ -6,25 +6,24 @@
 
 # Usage
 
-If installing a standalone instance of Zookeeper, then use something like this:
+Define an inventory file containing a `cluster` group for clustered deployments:
 
 ```
-...
-roles:
-  - ansible-java-ubuntu
-  - ansible-zookeeper-ubuntu
-...
+# Stand-alone node
+node
+
+# Clustered nodes
+# WARNING: make sure to define the ZooKeeper node ID (zkId)
+[cluster]
+node01 zkId=1
+node02 zkId=2
+node03 zkId=3
 ```
 
-If installing a unified [Hadoop](https://hadoop.apache.org/) instance for [Accumulo](https://accumulo.apache.org/) or other big data applications, be sure to provision Zookeeper first.  Many big data applications don't package their own Zookeeper JARs and require zookeeper to be installed on every node, even if zookeeper is disabled.  For example, something like this:
+Then from the parent directory:
 
 ```
-...
-roles:
-  - ansible-java-ubuntu
-  - ansible-zookeeper-ubuntu
-  - ansible-hadoop-ubuntu
-...
+ansible-playbook -i <inventory.ini> -u root ansible-zookeeper-ubuntu/playbook.yml
 ```
 
 # Contributing
