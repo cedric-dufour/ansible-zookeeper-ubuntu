@@ -1,3 +1,5 @@
+## REF: https://zookeeper.apache.org/doc/r{{ ZOOKEEPER_VERSION }}/zookeeperAdmin.html#sc_configuration
+
 # The number of milliseconds of each tick
 tickTime=2000
 # The number of ticks that the initial
@@ -15,6 +17,23 @@ clientPort={{ ZOOKEEPER_PORT }}
 # the maximum number of client connections.
 # increase this if you need to handle more clients
 maxClientCnxns={{ ZOOKEEPER_MAX_CONNECTIONS }}
+
+# Disable the embedded AdminServer
+# REF: https://zookeeper.apache.org/doc/r{{ ZOOKEEPER_VERSION }}/zookeeperAdmin.html#sc_adminserver
+admin.enableServer={{ ZOOKEEPER_ADMIN | lower }}
+
+# Cluster configuration
+# REF: https://zookeeper.apache.org/doc/r{{ ZOOKEEPER_VERSION }}/zookeeperAdmin.html#sc_clusterOptions
+# NOTE: Prefer IPs over hostnames (to avoid DNS issues creeping in)
+{% for host in groups['cluster'] %}
+server.{{ hostvars[host]['zkId'] }}={{ hostvars[host]['ansible_default_ipv4']['address'] }}:2888:3888
+{% endfor %}
+
+# Monitoring (using "four-letter commands")
+# REF: https://zookeeper.apache.org/doc/r3.5.4-beta/zookeeperAdmin.html#sc_zkCommands
+# NOTE: use 'echo mntr | nc {{ ansible_host }} {{ ZOOKEEPER_PORT }}'
+4lw.commands.whitelist=srvr,mntr
+
 #
 # Be sure to read the maintenance section of the
 # administrator guide before turning on autopurge.
@@ -26,3 +45,4 @@ maxClientCnxns={{ ZOOKEEPER_MAX_CONNECTIONS }}
 # Purge task interval in hours
 # Set to "0" to disable auto purge feature
 #autopurge.purgeInterval=1
+
