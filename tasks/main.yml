@@ -1,157 +1,218 @@
 ---
 
-- name: Install Basic Libraries
-  become: yes
-  become_user: root
+- name: "Install Basic Libraries"
+  tags: dependencies
   apt: name="{{ item }}" state=latest
   with_items:
     - ssh
     - rsync
 
-- name: "Ensure {{ ZOOKEEPER_HOME }} exists"
-  become: yes
-  become_user: root
-  file:
-    path: "{{ ZOOKEEPER_HOME }}"
-    state: directory
-
-- name: Create zookeeper group
-  become: yes
-  become_user: root
+- name: "Create ZooKeeper group"
+  tags:
+    - installation
+    - group
   group:
-    name: "{{ ZOOKEEPER_USER }}"
     state: present
+    name: "{{ ZOOKEEPER_GROUP }}"
+    system: yes
 
-- name: Create zookeeper user
-  become: yes
-  become_user: root
+- name: "Create ZooKeeper user"
+  tags:
+    - installation
+    - user
   user:
-    name: "{{ ZOOKEEPER_USER }}"
     state: present
-    group: "{{ ZOOKEEPER_USER }}"
+    name: "{{ ZOOKEEPER_USER }}"
+    comment: "ZooKeeper Distributed Coordination Server (daemon account)"
+    system: yes
+    group: "{{ ZOOKEEPER_GROUP }}"
+    groups: staff
     home: "{{ ZOOKEEPER_HOME }}"
-    shell: /bin/bash
+    createhome: no
+    shell: /usr/sbin/nologin
 
-- name: Stop Zookeeper
-  become: yes
-  become_user: "{{ ZOOKEEPER_USER }}"
-  shell: ". {{ ZOOKEEPER_HOME }}/.bashrc && bin/zkServer.sh stop"
-  args:
-    chdir: "{{ ZOOKEEPER_HOME }}"
+- name: "Ensure {{ ZOOKEEPER_ROOT }} exists"
+  tags:
+    - installation
+    - filesystem
+  file:
+    state: directory
+    path: "{{ ZOOKEEPER_ROOT }}"
+
+- name: "Stop ZooKeeper"
+  tags:
+    - service
+    - stop
+  systemd:
+    name: "zookeeper"
+    state: stopped
   when: ZOOKEEPER_STOP | bool
   failed_when: false
 
-- name: "Download Files"
-  become: yes
-  become_user: root
+- name: "Download ZooKeeper tarball"
+  tags:
+    - installation
+    - download
   get_url:
     url: "{{ ZOOKEEPER_URL }}"
     dest: "/opt/zookeeper-{{ ZOOKEEPER_VERSION }}.tar.gz"
     checksum: "{{ ZOOKEEPER_CHECKSUM }}"
 
-- name: "Unzip Zookeeper"
-  become: yes
-  become_user: root
+- name: "Unpack ZooKeeper tarball"
+  tags:
+    - installation
+    - unpack
   unarchive:
     src: "/opt/zookeeper-{{ ZOOKEEPER_VERSION }}.tar.gz"
-    dest: "/opt"
+    dest: "{{ ZOOKEEPER_ROOT }}"
+    creates: "{{ ZOOKEEPER_ROOT }}/zookeeper-{{ ZOOKEEPER_VERSION }}"
     copy: no
 
-- name: "Force owner for zookeeper to root"
-  become: yes
-  become_user: root
+- name: "Force owner to root"
+  tags:
+    - installation
+    - filesystem
   file:
-    path: "/opt/zookeeper-{{ ZOOKEEPER_VERSION }}"
     state: directory
+    path: "{{ ZOOKEEPER_ROOT }}/zookeeper-{{ ZOOKEEPER_VERSION }}"
     recurse: yes
     owner: root
     group: root
 
-- name: "Copy zookeeper from /opt into /usr/local"
-  become: yes
-  become_user: root
-  shell: "cp -R /opt/zookeeper-{{ ZOOKEEPER_VERSION }}/* {{ ZOOKEEPER_HOME }}/"
-
-- name: "Delete temporary zookeeper data"
-  become: yes
-  become_user: root
+- name: "Symlink current ZooKeeper version"
+  tags:
+    - installation
+    - filesystem
   file:
-    path: "{{ item }}"
-    state: absent
-  with_items:
-    - "/tmp/zookeeper"
-    - "{{ ZOOKEEPER_DATA }}"
+    state: link
+    force: yes
+    path: "{{ ZOOKEEPER_HOME }}"
+    src: "./zookeeper-{{ ZOOKEEPER_VERSION }}/"
 
-- name: "Template ~/.bashrc"
-  become: yes
-  become_user: root
-  template:
-    src: bashrc.j2
-    dest: "{{ ZOOKEEPER_HOME }}/.bashrc"
-    owner: "{{ ZOOKEEPER_USER }}"
-    group: "{{ ZOOKEEPER_USER }}"
-    mode: 0755
+- name: "Ensure {{ ZOOKEEPER_CONF }} exists"
+  tags:
+    - installation
+    - filesystem
+  file:
+    state: directory
+    path: "{{ ZOOKEEPER_CONF }}"
 
-- name: "Copy ~/.profile"
-  become: yes
-  become_user: root
-  copy:
-    src: profile
-    dest: "{{ ZOOKEEPER_HOME }}/.profile"
-    owner: "{{ ZOOKEEPER_USER }}"
-    group: "{{ ZOOKEEPER_USER }}"
-    mode: 0755
+- name: "Debugs hosts variables"
+  debug: var=hostvars
+  tags:
+    - debug
+  when: ANSIBLE_DEBUG | default(false) | bool
 
-- name: "Configure zookeeper config"
-  become: yes
-  become_user: root
+- name: "Create ZooKeeper (local site) configuration"
+  tags:
+    - installation
+    - configuration
+    - filesystem
+    - service
   template:
     src: zoo.cfg.j2
-    dest: "{{ ZOOKEEPER_HOME }}/conf/zoo.cfg"
-    owner: "{{ ZOOKEEPER_USER }}"
-    group: "{{ ZOOKEEPER_USER }}"
-    mode: 0644
+    dest: "{{ ZOOKEEPER_CONF }}/zoo.cfg"
+    owner: root
+    group: "{{ ZOOKEEPER_GROUP }}"
+    mode: 0640
 
-- name: "Patch zookeeper log settings"
-  become: yes
-  become_user: root
-  lineinfile:
-    dest: "{{ ZOOKEEPER_HOME }}/conf/log4j.properties"
-    regexp: "{{ item.regexp }}"
-    line: "{{ item.line }}"
-  with_items:
-    - regexp: "^(#?)(\\s*)zookeeper.log.dir(\\s*)="
-      line: "zookeeper.log.dir={{ ZOOKEEPER_HOME }}/logs"
-    - regexp: "^(#?)(\\s*)log4j.rootLogger=DEBUG, CONSOLE, ROLLINGFILE"
-      line: "log4j.rootLogger=DEBUG, CONSOLE, ROLLINGFILE"
-    - regexp: "^(#?)(\\s*)log4j.appender.ROLLINGFILE.MaxBackupIndex(\\s*)="
-      line: log4j.appender.ROLLINGFILE.MaxBackupIndex=10
-
-- name: "Check owner is zookeeper"
-  become: yes
-  become_user: root
+- name: "Symlink ZooKeeper (local site) configuration"
+  tags:
+    - installation
+    - configuration
+    - filesystem
   file:
-    path: "{{ ZOOKEEPER_HOME }}"
+    state: link
+    force: yes
+    path: "{{ ZOOKEEPER_HOME }}/conf/zoo.cfg"
+    src: "{{ ZOOKEEPER_CONF }}/zoo.cfg"
+
+- name: "Ensure {{ ZOOKEEPER_LOGS }} exists (with proper permissions)"
+  tags:
+    - installation
+    - filesystem
+  file:
     state: directory
-    recurse: yes
-    owner: "{{ ZOOKEEPER_USER }}"
-    group: "{{ ZOOKEEPER_USER }}"
+    path: "{{ ZOOKEEPER_LOGS }}"
+    owner: root
+    group: "{{ ZOOKEEPER_GROUP }}"
+    mode: 02730
 
-- name: "Check mode for zookeeper logs"
-  become: yes
-  become_user: root
+- name: "Symlink ZooKeeper logs"
+  tags:
+    - installation
+    - filesystem
   file:
+    state: link
+    force: yes
     path: "{{ ZOOKEEPER_HOME }}/logs"
-    state: directory
-    recurse: yes
-    owner: "{{ ZOOKEEPER_USER }}"
-    group: "{{ ZOOKEEPER_USER }}"
-    mode: 0755
+    src: "{{ ZOOKEEPER_LOGS }}/"
 
-- name: Start Zookeeper
-  become: yes
-  become_user: "{{ ZOOKEEPER_USER }}"
-  shell: ". .bashrc && bin/zkServer.sh start"
-  args:
-    chdir: "{{ ZOOKEEPER_HOME }}"
+- name: "Ensure {{ ZOOKEEPER_DATA }} exists (with proper permissions)"
+  tags:
+    - installation
+    - filesystem
+  file:
+    state: directory
+    path: "{{ ZOOKEEPER_DATA }}"
+    owner: root
+    group: "{{ ZOOKEEPER_GROUP }}"
+    mode: 02730
+
+- name: "Symlink ZooKeeper data"
+  tags:
+    - installation
+    - filesystem
+  file:
+    state: link
+    force: yes
+    path: "{{ ZOOKEEPER_HOME }}/data"
+    src: "{{ ZOOKEEPER_DATA }}/"
+
+- name: "Create ZooKeeper node ID"
+  tags:
+    - installation
+    - configuration
+    - filesystem
+  template:
+    src: zoo.myid.j2
+    dest: "{{ ZOOKEEPER_DATA }}/myid"
+  when: hostvars[ansible_host]['zkId'] is defined
+
+- name: "Delete temporary ZooKeeper data"
+  tags:
+    - installation
+    - filesystem
+  file:
+    state: absent
+    path: "{{ item }}"
+  with_items:
+    - "/tmp/zookeeper"
+    - "{{ ZOOKEEPER_DATA }}/zookeeper_server.pid"
+
+- name: "Configure ZooKeeper systemd service"
+  tags:
+    - installation
+    - service
+  template:
+    src: zookeeper.service.j2
+    dest: "/etc/systemd/system/zookeeper.service"
+
+- name: "Enable ZooKeeper (at boot)"
+  tags:
+    - service
+    - enable
+  systemd:
+    name: "zookeeper"
+    daemon_reload: yes
+    enabled: "{{ ZOOKEEPER_ATBOOT }}"
+
+- name: "Start ZooKeeper"
+  tags:
+    - service
+    - start
+  systemd:
+    name: "zookeeper"
+    state: started
   when: ZOOKEEPER_START | bool
+
