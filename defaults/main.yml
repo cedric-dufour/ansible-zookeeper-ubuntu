@@ -1,12 +1,29 @@
 ---
 
+# Upstream source
+ZOOKEEPER_VERSION: "3.5.4-beta"
+ZOOKEEPER_URL: "http://apache.cs.utah.edu/zookeeper/zookeeper-{{ ZOOKEEPER_VERSION }}/zookeeper-{{ ZOOKEEPER_VERSION }}.tar.gz"
+ZOOKEEPER_CHECKSUM: "sha256:5cb6be32e2528b60be607baf787ddcbb741288ab840e91d2e5b477ab9f8bee1a"
+
+# Local installation (sticking to the Unix FHS)
+# TODO: Not sure I like using /usr/local instead of /opt
+ZOOKEEPER_GROUP: zookeeper
 ZOOKEEPER_USER: zookeeper
-ZOOKEEPER_HOME: "/usr/local/zookeeper"
-ZOOKEEPER_DATA: "/usr/local/zookeeper/data"
-ZOOKEEPER_URL: "http://apache.cs.utah.edu/zookeeper/zookeeper-3.4.11/zookeeper-3.4.11.tar.gz"
-ZOOKEEPER_VERSION: "3.4.11"
-ZOOKEEPER_CHECKSUM: "sha256:f6bd68a1c8f7c13ea4c2c99f13082d0d71ac464ffaf3bf7a365879ab6ad10e84"
+ZOOKEEPER_ROOT: "/usr/local"
+ZOOKEEPER_HOME: "{{ ZOOKEEPER_ROOT }}/zookeeper"
+ZOOKEEPER_CONF: "/etc/zookeeper"
+ZOOKEEPER_DATA: "/var/lib/zookeeper/data"
+ZOOKEEPER_LOGS: "/var/log/zookeeper"
+
+# Runtime configuration
 ZOOKEEPER_PORT: 2181
 ZOOKEEPER_MAX_CONNECTIONS: 120
 ZOOKEEPER_STOP: true
-ZOOKEEPER_START: false
+ZOOKEEPER_START: true
+ZOOKEEPER_ATBOOT: true
+# ... logging (LOG4J stanza)
+#ZOOKEEPER_LOG4J: "DEBUG,CONSOLE,ROLLINGFILE"
+ZOOKEEPER_LOG4J: "INFO,CONSOLE"
+# ... embedded AdminServer
+ZOOKEEPER_ADMIN: false
+
